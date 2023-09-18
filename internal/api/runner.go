@@ -1,9 +1,12 @@
 package api
 
 import (
+	"fmt"
 	"github.com/abigpotostew/go-api/internal/model/recipe"
 	"github.com/abigpotostew/go-api/internal/servicedep"
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
+	"github.com/uptrace/bun/driver/pgdriver"
 	"net/http"
 )
 
@@ -42,9 +45,39 @@ func deleteRecipeHandler(dep *servicedep.ServiceDep) gin.HandlerFunc {
 	}
 }
 
+func wsHandler(dep *servicedep.ServiceDep) gin.HandlerFunc {
+
+	var upgrader = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+	}
+	return func(c *gin.Context) {
+		ln := pgdriver.NewListener(dep.DB.Database)
+		if err := ln.Listen(c, "recipes:updated", "recipes:created"); err != nil {
+			panic(err)
+		}
+		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+		if err != nil {
+			c.IndentedJSON(http.StatusBadRequest, gin.H{"status": "failed to upgrade connection"})
+			return
+		}
+		defer conn.Close()
+
+		for notif := range ln.Channel() {
+			msg := fmt.Sprintf("%s: %s", notif.Channel, notif.Payload)
+			err := conn.WriteMessage(websocket.TextMessage, []byte(msg))
+			if err != nil {
+				fmt.Println("could not write message", err.Error())
+				break
+			}
+		}
+	}
+}
+
 func NewApiHandler(router *gin.Engine, dep *servicedep.ServiceDep) error {
 	router.GET("/recipes", getRecipesHandler(dep))
 	router.POST("/recipes", postRecipeHandler(dep))
 	router.DELETE("/recipes", deleteRecipeHandler(dep))
+	router.GET("/ws", wsHandler(dep))
 	return nil
 }
