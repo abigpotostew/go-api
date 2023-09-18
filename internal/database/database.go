@@ -1,12 +1,23 @@
 package database
 
 import (
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
+	"database/sql"
+	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect/pgdialect"
+	"github.com/uptrace/bun/driver/pgdriver"
+	"github.com/uptrace/bun/extra/bundebug"
 )
 
-func ConnectDatabase(dsn string) (*gorm.DB, error) {
-	//dsn := "host=localhost user=gorm password=gorm dbname=gorm port=9920 sslmode=disable TimeZone=Asia/Shanghai"
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
-	return db, err
+func ConnectDatabase(dsn string) *bun.DB {
+	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
+	db := bun.NewDB(sqldb, pgdialect.New())
+	db.AddQueryHook(bundebug.NewQueryHook(
+		// disable the hook
+		bundebug.WithEnabled(false),
+
+		// BUNDEBUG=1 logs failed queries
+		// BUNDEBUG=2 logs all queries
+		bundebug.FromEnv("BUNDEBUG"),
+	))
+	return db
 }

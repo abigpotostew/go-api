@@ -2,21 +2,14 @@ package main
 
 import (
 	"github.com/abigpotostew/go-api/internal/api"
-	"github.com/abigpotostew/go-api/internal/database"
+	"github.com/abigpotostew/go-api/internal/servicedep"
 	"github.com/gin-gonic/gin"
-	"os"
 )
 
 func main() {
-	dsn := os.Getenv("DATABASE_URL")
-
-	db, err := database.ConnectDatabase(dsn)
-	if err != nil {
-		println("Error connecting to database")
-		panic(err)
-	}
+	deps := servicedep.NewServiceDep()
 	router := gin.Default()
-	err = api.NewApiHandler(router, db)
+	err := api.NewApiHandler(router, deps)
 	if err != nil {
 		println("Error creating API handler")
 		panic(err)
